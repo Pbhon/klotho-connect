@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  /* Klotho token system: warm paper grounded by a morning-gold / dusk-plum pair,
+     the two ends of the thread Klotho spins -- youth and elders. */
+  --color-paper: #F8F2E4;
+  --color-paper-dim: #F0E8D6;
+  --color-ink: #2A211D;
+  --color-ink-soft: #5C4F49;
+
+  --color-gold: #D98E32;
+  --color-gold-dark: #B36F1E;
+  --color-gold-light: #F1C583;
+
+  --color-plum: #5B3654;
+  --color-plum-dark: #402440;
+  --color-plum-light: #7A4E71;
+
+  --color-sand: #E8DFCC;
+  --color-sand-dark: #D8CBAE;
+
+  --color-sage: #5C7A5C;
+  --color-sage-light: #E4EBE1;
+  --color-rust: #B0432E;
+  --color-rust-light: #F6E3DE;
+
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1.1rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-plum);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-sand-dark bg-white/70 px-3.5 py-2.5 text-[15px] text-ink outline-none transition focus:border-plum focus:ring-2 focus:ring-plum/15;
+  }
+}
+
+.thread-draw {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  animation: thread-draw 1.6s ease-out forwards;
+}
+
+@keyframes thread-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

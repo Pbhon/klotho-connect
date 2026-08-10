@@ -1,0 +1,150 @@
+rules_version = '2';
+
+// Klotho Connect — Firestore security rules
+//
+// The chapter-lead signup code lives ONLY in this file (see
+// adminVerifications below). It is never sent to the client bundle and
+// never stored anywhere a client can read back — only its *existence*
+// (via a short-lived verification doc) is ever checked.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdminOfChapter(chapterId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myProfile().role == 'admin'
+        && myProfile().chapterId == chapterId;
+    }
+
+    // True for ~1 hour after a correct code was entered. The client
+    // deletes this doc itself right after finishing signup; the 1-hour
+    // window is just a backstop if that delete doesn't happen.
+    function passedAdminCodeCheck() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/adminVerifications/$(request.auth.uid))
+        && get(/databases/$(database)/documents/adminVerifications/$(request.auth.uid)).data.verifiedAt
+             > request.time - duration.value(1, 'h');
+    }
+
+    // -----------------------------------------------------------------
+    // adminVerifications/{uid} — proof that a signup attempt knew the
+    // chapter-lead code. Nobody can ever read these back, including the
+    // person who wrote it; only its existence + freshness is checked.
+    //
+    // >>> CHANGE "klotho-lead-2026" to your own code before you deploy. <<<
+    // To rotate it later: edit the string below, then run
+    //   firebase deploy --only firestore:rules
+    // Anyone with the current code can register a brand-new chapter, or
+    // add themselves as a second/successor lead on an existing one.
+    // -----------------------------------------------------------------
+    match /adminVerifications/{uid} {
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.code == "klotho-lead-2026";
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow read, update: if false;
+    }
+
+    // -----------------------------------------------------------------
+    // users/{userId} — one profile per account. role is 'volunteer' or
+    // 'admin'; admins also carry a chapterId.
+    // -----------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        (
+          request.resource.data.role == 'volunteer' &&
+          request.resource.data.keys().hasAll(['name', 'email', 'role'])
+        ) || (
+          request.resource.data.role == 'admin' &&
+          request.resource.data.chapterId is string &&
+          passedAdminCodeCheck()
+        )
+      );
+
+      // Owner can rename themselves; nothing else about a profile
+      // (role, chapterId, email) can change after signup.
+      allow update: if isSignedIn() && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
+
+      allow delete: if false;
+    }
+
+    // -----------------------------------------------------------------
+    // chapters/{chapterId} — public read (the signup form needs to show
+    // existing chapters before an account exists). Only a code-verified
+    // signup can create one; joining an existing chapter as a co-lead
+    // can only ever append the caller's own uid, nothing else.
+    // -----------------------------------------------------------------
+    match /chapters/{chapterId} {
+      allow read: if true;
+
+      allow create: if passedAdminCodeCheck()
+        && request.resource.data.adminIds == [request.auth.uid]
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.state is string;
+
+      allow update: if passedAdminCodeCheck()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminIds'])
+        && request.resource.data.adminIds == resource.data.adminIds.concat([request.auth.uid]);
+
+      allow delete: if false;
+    }
+
+    // -----------------------------------------------------------------
+    // events/{eventId} — public read. Only the owning chapter's
+    // admin(s) can write. reminderSent is flipped by the scheduled
+    // Cloud Function, which uses the Admin SDK and bypasses these rules
+    // entirely, so it needs no special allowance here.
+    // -----------------------------------------------------------------
+    match /events/{eventId} {
+      allow read: if true;
+
+      allow create: if isAdminOfChapter(request.resource.data.chapterId)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.reminderSent == false;
+
+      allow update: if isAdminOfChapter(resource.data.chapterId)
+        && request.resource.data.chapterId == resource.data.chapterId
+        && request.resource.data.createdBy == resource.data.createdBy;
+
+      allow delete: if isAdminOfChapter(resource.data.chapterId);
+
+      // ---------------------------------------------------------------
+      // signups/{uid} — one doc per volunteer, doc id == their own uid.
+      // Readable by that volunteer and by the event's chapter admin(s);
+      // deletable by either (a volunteer cancelling, or an admin
+      // cascade-deleting the whole event).
+      // ---------------------------------------------------------------
+      match /signups/{uid} {
+        allow read: if isSignedIn() && (
+          request.auth.uid == uid ||
+          isAdminOfChapter(get(/databases/$(database)/documents/events/$(eventId)).data.chapterId)
+        );
+
+        allow create: if isSignedIn()
+          && request.auth.uid == uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.eventId == eventId;
+
+        allow delete: if isSignedIn() && (
+          request.auth.uid == uid ||
+          isAdminOfChapter(get(/databases/$(database)/documents/events/$(eventId)).data.chapterId)
+        );
+
+        allow update: if false;
+      }
+    }
+  }
+}
