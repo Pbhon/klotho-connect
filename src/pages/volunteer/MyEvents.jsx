@@ -13,7 +13,12 @@ export default function MyEvents() {
     getMyEvents(profile.uid).then(setEvents);
   }, [profile.uid]);
 
-  if (events === null) return <Spinner label="Loading your events…" />;
+  if (events === null) return (
+      <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-10">
+        <h1 className="font-display text-3xl font-semibold text-ink">My events</h1>
+        <p className="mt-1.5 text-ink-soft">No current events</p>
+      </div>
+  );
 
   const upcoming = events.filter((e) => !isPast(e.dateTime));
   const past = events.filter((e) => isPast(e.dateTime));

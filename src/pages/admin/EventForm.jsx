@@ -122,6 +122,9 @@ export default function EventForm({ mode }) {
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-ink">Time</span>
             <input required type="time" value={time} onChange={(e) => setTime(e.target.value)} className="input" />
+            <span className="text-xs text-ink-soft">
+            Ex. 11:23 AM
+            </span>
           </label>
         </div>
 
@@ -136,7 +139,7 @@ export default function EventForm({ mode }) {
             className="input"
           />
           <span className="text-xs text-ink-soft">
-            This is a goal, not a cap \u2014 people can keep signing up after it's reached.
+            This is a goal, not a cap people can keep signing up after it's reached.
           </span>
         </label>
 

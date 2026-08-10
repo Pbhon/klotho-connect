@@ -49,7 +49,7 @@ service cloud.firestore {
     match /adminVerifications/{uid} {
       allow create: if isSignedIn()
         && request.auth.uid == uid
-        && request.resource.data.code == "klotho-lead-2026";
+        && request.resource.data.code == "5N5vT{{sU<sj1Q>@W6ef`[Hh0";
       allow delete: if isSignedIn() && request.auth.uid == uid;
       allow read, update: if false;
     }
