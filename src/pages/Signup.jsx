@@ -219,7 +219,7 @@ export default function Signup() {
             )}
 
             {chapterChoice === NEW_CHAPTER && (
-              <Field label="New chapter name" hint="Usually a city or campus, e.g. \u201cColumbus\u201d.">
+              <Field label="New chapter name" hint="Name it by the school you go to. Ex. Olentangy Orange">
                 <input
                   required
                   value={newChapterName}

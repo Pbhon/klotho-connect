@@ -25,9 +25,6 @@ service cloud.firestore {
         && myProfile().chapterId == chapterId;
     }
 
-    // True for ~1 hour after a correct code was entered. The client
-    // deletes this doc itself right after finishing signup; the 1-hour
-    // window is just a backstop if that delete doesn't happen.
     function passedAdminCodeCheck() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/adminVerifications/$(request.auth.uid))
@@ -35,17 +32,6 @@ service cloud.firestore {
              > request.time - duration.value(1, 'h');
     }
 
-    // -----------------------------------------------------------------
-    // adminVerifications/{uid} — proof that a signup attempt knew the
-    // chapter-lead code. Nobody can ever read these back, including the
-    // person who wrote it; only its existence + freshness is checked.
-    //
-    // >>> CHANGE "klotho-lead-2026" to your own code before you deploy. <<<
-    // To rotate it later: edit the string below, then run
-    //   firebase deploy --only firestore:rules
-    // Anyone with the current code can register a brand-new chapter, or
-    // add themselves as a second/successor lead on an existing one.
-    // -----------------------------------------------------------------
     match /adminVerifications/{uid} {
       allow create: if isSignedIn()
         && request.auth.uid == uid
@@ -54,10 +40,6 @@ service cloud.firestore {
       allow read, update: if false;
     }
 
-    // -----------------------------------------------------------------
-    // users/{userId} — one profile per account. role is 'volunteer' or
-    // 'admin'; admins also carry a chapterId.
-    // -----------------------------------------------------------------
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
 
@@ -72,20 +54,15 @@ service cloud.firestore {
         )
       );
 
-      // Owner can rename themselves; nothing else about a profile
-      // (role, chapterId, email) can change after signup.
+      // Owner can rename themselves and star/unstar chapters; nothing
+      // else about a profile (role, chapterId, email) can change after
+      // signup.
       allow update: if isSignedIn() && request.auth.uid == userId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'favoriteChapterIds']);
 
       allow delete: if false;
     }
 
-    // -----------------------------------------------------------------
-    // chapters/{chapterId} — public read (the signup form needs to show
-    // existing chapters before an account exists). Only a code-verified
-    // signup can create one; joining an existing chapter as a co-lead
-    // can only ever append the caller's own uid, nothing else.
-    // -----------------------------------------------------------------
     match /chapters/{chapterId} {
       allow read: if true;
 
@@ -102,34 +79,56 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // -----------------------------------------------------------------
-    // events/{eventId} — public read. Only the owning chapter's
-    // admin(s) can write. reminderSent is flipped by the scheduled
-    // Cloud Function, which uses the Admin SDK and bypasses these rules
-    // entirely, so it needs no special allowance here.
-    // -----------------------------------------------------------------
+    // events/{eventId} — public read. Event *details* are admin-only to
+    // write. signupCount can also be nudged by exactly +-1 by any
+    // signed-in user and nothing else on the doc -- that's how a
+    // volunteer's own sign-up/cancel keeps the counter in sync.
     match /events/{eventId} {
       allow read: if true;
 
       allow create: if isAdminOfChapter(request.resource.data.chapterId)
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.reminderSent == false;
+        && request.resource.data.reminderSent == false
+        && request.resource.data.signupCount == 0;
 
-      allow update: if isAdminOfChapter(resource.data.chapterId)
+      allow update: if (
+        isAdminOfChapter(resource.data.chapterId)
         && request.resource.data.chapterId == resource.data.chapterId
-        && request.resource.data.createdBy == resource.data.createdBy;
+        && request.resource.data.createdBy == resource.data.createdBy
+      ) || (
+        isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signupCount'])
+        && (
+          request.resource.data.signupCount == resource.data.signupCount + 1 ||
+          request.resource.data.signupCount == resource.data.signupCount - 1
+        )
+      );
 
       allow delete: if isAdminOfChapter(resource.data.chapterId);
 
-      // ---------------------------------------------------------------
       // signups/{uid} — one doc per volunteer, doc id == their own uid.
-      // Readable by that volunteer and by the event's chapter admin(s);
-      // deletable by either (a volunteer cancelling, or an admin
-      // cascade-deleting the whole event).
-      // ---------------------------------------------------------------
+      //
+      // get/delete use the *path* segment (uid) -- Firestore can check
+      // that even when the doc doesn't exist yet, which is needed so
+      // "am I signed up" reads back false instead of erroring for
+      // someone who's never signed up.
+      //
+      // list uses the *data field* `uid` instead, because Firestore can
+      // only approve a multi-document query (the collection-group query
+      // behind My events) if the rule matches the query's own where()
+      // clause -- and where('uid','==', ...) filters on the field, not
+      // the path segment, even though both hold the same value here.
+      // This distinction is exactly what was causing My Events (and the
+      // old getSignupCount aggregate) to hang indefinitely instead of
+      // erroring visibly.
       match /signups/{uid} {
-        allow read: if isSignedIn() && (
+        allow get: if isSignedIn() && (
           request.auth.uid == uid ||
+          isAdminOfChapter(get(/databases/$(database)/documents/events/$(eventId)).data.chapterId)
+        );
+
+        allow list: if isSignedIn() && (
+          resource.data.uid == request.auth.uid ||
           isAdminOfChapter(get(/databases/$(database)/documents/events/$(eventId)).data.chapterId)
         );
 

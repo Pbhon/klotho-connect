@@ -26,10 +26,6 @@ export default function Home() {
       <section className="relative overflow-hidden border-b border-sand">
         <div className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-[1.2fr_1fr] md:items-center md:py-24">
           <div>
-            <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-sand-dark bg-paper-dim px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-plum">
-              <ThreadMark className="h-4 w-4" />
-              The Klotho Foundation
-            </p>
             <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-ink sm:text-5xl md:text-6xl">
               One thread,<br />two generations.
             </h1>
