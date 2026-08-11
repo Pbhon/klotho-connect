@@ -1,7 +1,7 @@
 import {
   collection, doc, addDoc, updateDoc, getDoc, getDocs,
   query, where, orderBy, onSnapshot, serverTimestamp, Timestamp,
-  collectionGroup, writeBatch, increment, documentId, arrayUnion, arrayRemove,
+  writeBatch, increment, documentId, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -26,9 +26,6 @@ export async function getChapter(chapterId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/** Fetches multiple chapters by id in one query (used for the "starred
- *  chapters" shortcut list). Firestore's `in` operator caps at 30 ids,
- *  which a personal favorites list should never come close to. */
 export async function getChaptersByIds(chapterIds) {
   if (!chapterIds || chapterIds.length === 0) return [];
   const q = query(collection(db, 'chapters'), where(documentId(), 'in', chapterIds.slice(0, 30)));
@@ -36,7 +33,6 @@ export async function getChaptersByIds(chapterIds) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/** Star / unstar a chapter on the current volunteer's profile. */
 export async function setChapterFavorite(uid, chapterId, favorited) {
   await updateDoc(doc(db, 'users', uid), {
     favoriteChapterIds: favorited ? arrayUnion(chapterId) : arrayRemove(chapterId),
@@ -66,14 +62,38 @@ export async function createEvent({
   });
 }
 
+/** Updates an event, and keeps every signed-up volunteer's "My events"
+ *  snapshot (users/{uid}/myEvents/{eventId}) in sync with whatever
+ *  changed, in the same batch. This is why edits never go stale on a
+ *  volunteer's My Events list. */
 export async function updateEvent(eventId, data) {
-  await updateDoc(doc(db, 'events', eventId), data);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'events', eventId), data);
+
+  const denormFields = {};
+  ['title', 'description', 'location', 'dateTime', 'volunteersNeeded'].forEach((key) => {
+    if (key in data) denormFields[key] = data[key];
+  });
+  if (Object.keys(denormFields).length > 0) {
+    const signupsSnap = await getDocs(collection(db, 'events', eventId, 'signups'));
+    signupsSnap.docs.forEach((signupDoc) => {
+      batch.update(doc(db, 'users', signupDoc.id, 'myEvents', eventId), denormFields);
+    });
+  }
+
+  await batch.commit();
 }
 
+/** Deletes an event, every signup doc under it, and every volunteer's
+ *  denormalized copy of it -- Firestore never cascade-deletes any of
+ *  this on its own. */
 export async function deleteEvent(eventId) {
   const signupsSnap = await getDocs(collection(db, 'events', eventId, 'signups'));
   const batch = writeBatch(db);
-  signupsSnap.docs.forEach((d) => batch.delete(d.ref));
+  signupsSnap.docs.forEach((d) => {
+    batch.delete(d.ref);
+    batch.delete(doc(db, 'users', d.id, 'myEvents', eventId));
+  });
   batch.delete(doc(db, 'events', eventId));
   await batch.commit();
 }
@@ -103,25 +123,40 @@ export function subscribeToChapterEvents(chapterId, callback) {
 
 // ---------- Signups ----------
 //
-// events/{id}.signupCount is a denormalized counter kept in sync with the
-// signups subcollection by the two functions below (both write it in the
-// same atomic batch as the signup doc itself). Every card/list reads this
-// field directly off the already-public event doc instead of separately
-// querying or counting the signups subcollection -- that subcollection is
-// restricted to "yourself, or the chapter admin," and a bare count query
-// with no owner-scoping isn't something Firestore rules can prove is safe.
+// Every sign-up writes to three places in one atomic batch:
+//   1. events/{id}/signups/{uid}      -- the actual roster entry
+//   2. events/{id}.signupCount        -- the denormalized progress counter
+//   3. users/{uid}/myEvents/{id}      -- a copy of the event, owned by the
+//                                         volunteer, so "My events" is a
+//                                         single cheap read on their own
+//                                         data instead of a cross-chapter
+//                                         collection-group query.
 
-export async function signUpForEvent({ eventId, chapterId, uid, name, email }) {
+export async function signUpForEvent({ event, uid, name, email }) {
   const batch = writeBatch(db);
-  batch.set(doc(db, 'events', eventId, 'signups', uid), {
+
+  batch.set(doc(db, 'events', event.id, 'signups', uid), {
     uid,
     name,
     email,
-    eventId,
-    chapterId,
+    eventId: event.id,
+    chapterId: event.chapterId,
     signedUpAt: serverTimestamp(),
   });
-  batch.update(doc(db, 'events', eventId), { signupCount: increment(1) });
+
+  batch.update(doc(db, 'events', event.id), { signupCount: increment(1) });
+
+  batch.set(doc(db, 'users', uid, 'myEvents', event.id), {
+    eventId: event.id,
+    chapterId: event.chapterId,
+    title: event.title,
+    description: event.description || '',
+    location: event.location || '',
+    dateTime: event.dateTime,
+    volunteersNeeded: event.volunteersNeeded,
+    signedUpAt: serverTimestamp(),
+  });
+
   await batch.commit();
 }
 
@@ -129,6 +164,7 @@ export async function cancelSignup(eventId, uid) {
   const batch = writeBatch(db);
   batch.delete(doc(db, 'events', eventId, 'signups', uid));
   batch.update(doc(db, 'events', eventId), { signupCount: increment(-1) });
+  batch.delete(doc(db, 'users', uid, 'myEvents', eventId));
   await batch.commit();
 }
 
@@ -145,20 +181,12 @@ export function subscribeToRoster(eventId, callback) {
   });
 }
 
-/** All events a volunteer has signed up for. Scoped by the `uid` *field*
- *  (not the doc id) so Firestore can prove the query only touches the
- *  caller's own signup docs -- see firestore.rules. */
+/** All events a volunteer has signed up for -- a single read of their own
+ *  users/{uid}/myEvents subcollection. No cross-collection query, no
+ *  index, no per-event follow-up reads. */
 export async function getMyEvents(uid) {
-  const q = query(collectionGroup(db, 'signups'), where('uid', '==', uid));
-  const signupsSnap = await getDocs(q);
-  const events = await Promise.all(
-      signupsSnap.docs.map(async (signupDoc) => {
-        const eventId = signupDoc.data().eventId;
-        const eventSnap = await getDoc(doc(db, 'events', eventId));
-        return eventSnap.exists() ? { id: eventSnap.id, ...eventSnap.data() } : null;
-      })
-  );
-  return events
-      .filter(Boolean)
+  const snap = await getDocs(collection(db, 'users', uid, 'myEvents'));
+  return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => a.dateTime.toMillis() - b.dateTime.toMillis());
 }

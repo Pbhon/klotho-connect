@@ -3,13 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { signUpForEvent, cancelSignup } from '../lib/firestore';
 import ConfirmModal from './ConfirmModal';
 
-/** Renders "Sign Up" / "Signed Up", handling the actual sign-up/cancel
- *  writes itself. Pass `stopPropagation` when this button lives inside a
- *  card that's also a <Link> (the browse grids), so clicking it doesn't
- *  also navigate. `onChange(signedUp)` fires after a successful toggle,
- *  so a parent list (e.g. My Events) can update itself immediately. */
 export default function SignupButton({
-                                         eventId, chapterId, initialSignedUp = false, disabled, stopPropagation, onChange, className = '',
+                                         event, initialSignedUp = false, disabled, stopPropagation, onChange, className = '',
                                      }) {
     const { profile } = useAuth();
     const [signedUp, setSignedUp] = useState(initialSignedUp);
@@ -36,7 +31,7 @@ export default function SignupButton({
         setError('');
         setBusy(true);
         try {
-            await signUpForEvent({ eventId, chapterId, uid: profile.uid, name: profile.name, email: profile.email });
+            await signUpForEvent({ event, uid: profile.uid, name: profile.name, email: profile.email });
             setSignedUp(true);
             onChange?.(true);
         } catch {
@@ -54,7 +49,7 @@ export default function SignupButton({
         setError('');
         setBusy(true);
         try {
-            await cancelSignup(eventId, profile.uid);
+            await cancelSignup(event.id, profile.uid);
             setSignedUp(false);
             onChange?.(false);
         } catch {

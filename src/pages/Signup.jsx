@@ -81,7 +81,6 @@ export default function Signup() {
           chapterId: chapterChoice === NEW_CHAPTER ? null : chapterChoice,
           newChapterName: chapterChoice === NEW_CHAPTER ? newChapterName : undefined,
         });
-        await refreshProfile();
         navigate('/admin');
       }
     } catch (err) {

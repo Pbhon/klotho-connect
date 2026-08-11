@@ -54,13 +54,34 @@ service cloud.firestore {
         )
       );
 
-      // Owner can rename themselves and star/unstar chapters; nothing
-      // else about a profile (role, chapterId, email) can change after
-      // signup.
       allow update: if isSignedIn() && request.auth.uid == userId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'favoriteChapterIds']);
 
       allow delete: if false;
+
+      // myEvents/{eventId} -- a denormalized copy of an event the owner
+      // has signed up for, written in the same batch as the signup
+      // itself (see signUpForEvent/cancelSignup/deleteEvent in
+      // lib/firestore.js). This is what makes "My events" a single cheap
+      // read instead of a fragile cross-chapter collection-group query.
+      // The owner creates/deletes their own copies; the event's chapter
+      // admin can refresh (not create/delete) copies when they edit the
+      // event, so an edit never leaves a volunteer looking at stale info.
+      match /myEvents/{eventId} {
+        allow read, create: if isSignedIn() && request.auth.uid == userId;
+
+        allow update: if isSignedIn()
+          && exists(/databases/$(database)/documents/events/$(eventId))
+          && isAdminOfChapter(get(/databases/$(database)/documents/events/$(eventId)).data.chapterId);
+
+        allow delete: if isSignedIn() && (
+          request.auth.uid == userId ||
+          (
+            exists(/databases/$(database)/documents/events/$(eventId)) &&
+            isAdminOfChapter(get(/databases/$(database)/documents/events/$(eventId)).data.chapterId)
+          )
+        );
+      }
     }
 
     match /chapters/{chapterId} {
@@ -79,10 +100,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // events/{eventId} — public read. Event *details* are admin-only to
-    // write. signupCount can also be nudged by exactly +-1 by any
-    // signed-in user and nothing else on the doc -- that's how a
-    // volunteer's own sign-up/cancel keeps the counter in sync.
     match /events/{eventId} {
       allow read: if true;
 
@@ -107,20 +124,8 @@ service cloud.firestore {
       allow delete: if isAdminOfChapter(resource.data.chapterId);
 
       // signups/{uid} — one doc per volunteer, doc id == their own uid.
-      //
-      // get/delete use the *path* segment (uid) -- Firestore can check
-      // that even when the doc doesn't exist yet, which is needed so
-      // "am I signed up" reads back false instead of erroring for
-      // someone who's never signed up.
-      //
-      // list uses the *data field* `uid` instead, because Firestore can
-      // only approve a multi-document query (the collection-group query
-      // behind My events) if the rule matches the query's own where()
-      // clause -- and where('uid','==', ...) filters on the field, not
-      // the path segment, even though both hold the same value here.
-      // This distinction is exactly what was causing My Events (and the
-      // old getSignupCount aggregate) to hang indefinitely instead of
-      // erroring visibly.
+      // get/delete use the path segment; list uses the data field
+      // (needed for the admin roster query — see isAdminOfChapter below).
       match /signups/{uid} {
         allow get: if isSignedIn() && (
           request.auth.uid == uid ||

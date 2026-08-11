@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { logIn, getUserProfile } from '../lib/auth';
+import Spinner from "../components/Spinner.jsx";
 
 export default function Login() {
   const { user, loading: authLoading, refreshProfile } = useAuth();

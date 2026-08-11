@@ -13,17 +13,30 @@ export default function EventDetail() {
   const [event, setEvent] = useState(null);
   const [chapter, setChapter] = useState(null);
   const [signedUp, setSignedUp] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    const ev = await getEvent(eventId);
-    if (!ev) return;
-    const [ch, mine] = await Promise.all([
-      getChapter(ev.chapterId),
-      isSignedUp(eventId, profile.uid),
-    ]);
-    setEvent(ev);
-    setChapter(ch);
-    setSignedUp(mine);
+    setLoading(true);
+    setError('');
+    try {
+      const ev = await getEvent(eventId);
+      if (!ev) {
+        setError('This event doesn\u2019t exist anymore.');
+        return;
+      }
+      const [ch, mine] = await Promise.all([
+        getChapter(ev.chapterId),
+        isSignedUp(eventId, profile.uid),
+      ]);
+      setEvent(ev);
+      setChapter(ch);
+      setSignedUp(mine);
+    } catch {
+      setError('Couldn\u2019t load this event.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -31,7 +44,22 @@ export default function EventDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  if (!event) return <Spinner label="Loading event…" />;
+  if (loading) return <Spinner label="Loading event…" />;
+
+  if (error || !event) {
+    return (
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-3 px-5 py-14 text-center">
+          <p className="text-ink-soft">{error || 'This event doesn\u2019t exist anymore.'}</p>
+          <button
+              onClick={load}
+              className="rounded-full border border-sand-dark px-5 py-2 text-sm font-semibold text-ink-soft hover:border-plum hover:text-plum"
+          >
+            Try again
+          </button>
+          <Link to="/volunteer" className="text-sm font-semibold text-plum hover:underline">Back to browse</Link>
+        </div>
+    );
+  }
 
   const past = isPast(event.dateTime);
   const signupCount = event.signupCount ?? 0;
@@ -74,8 +102,7 @@ export default function EventDetail() {
 
           {!past && (
               <SignupButton
-                  eventId={eventId}
-                  chapterId={event.chapterId}
+                  event={event}
                   initialSignedUp={signedUp}
                   onChange={(newSignedUp) => {
                     setSignedUp(newSignedUp);

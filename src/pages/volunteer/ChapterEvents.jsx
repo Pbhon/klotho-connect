@@ -54,8 +54,7 @@ export default function ChapterEvents() {
                         event={ev}
                         footer={
                           <SignupButton
-                              eventId={ev.id}
-                              chapterId={chapterId}
+                              event={ev}
                               initialSignedUp={signedUpMap[ev.id] || false}
                               stopPropagation
                               onChange={(signedUp) => setSignedUpMap((prev) => ({ ...prev, [ev.id]: signedUp }))}

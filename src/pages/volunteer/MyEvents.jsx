@@ -9,16 +9,37 @@ import Spinner from '../../components/Spinner';
 export default function MyEvents() {
     const { profile } = useAuth();
     const [events, setEvents] = useState(null);
+    const [error, setError] = useState('');
 
-    useEffect(() => {
-        getMyEvents(profile.uid).then(setEvents);
-    }, [profile.uid]);
+    function load() {
+        setError('');
+        setEvents(null);
+        getMyEvents(profile.uid)
+            .then(setEvents)
+            .catch(() => setError('Couldn\u2019t load your events.'));
+    }
 
-    if (events === null) return <Spinner label="Loading your events…" />;
+    useEffect(load, [profile.uid]);
 
     function handleCancelled(eventId) {
         setEvents((prev) => prev.filter((e) => e.id !== eventId));
     }
+
+    if (error) {
+        return (
+            <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-3 px-5 py-14 text-center">
+                <p className="text-ink-soft">{error}</p>
+                <button
+                    onClick={load}
+                    className="rounded-full border border-sand-dark px-5 py-2 text-sm font-semibold text-ink-soft hover:border-plum hover:text-plum"
+                >
+                    Try again
+                </button>
+            </div>
+        );
+    }
+
+    if (events === null) return <Spinner label="Loading your events…" />;
 
     const upcoming = events.filter((e) => !isPast(e.dateTime));
     const past = events.filter((e) => isPast(e.dateTime));
@@ -44,8 +65,7 @@ export default function MyEvents() {
                                     {ev.location && <p className="text-sm text-ink-soft">{ev.location}</p>}
                                 </Link>
                                 <SignupButton
-                                    eventId={ev.id}
-                                    chapterId={ev.chapterId}
+                                    event={ev}
                                     initialSignedUp
                                     onChange={(signedUp) => !signedUp && handleCancelled(ev.id)}
                                     className="w-36 shrink-0"

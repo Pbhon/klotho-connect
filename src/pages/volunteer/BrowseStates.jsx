@@ -45,8 +45,7 @@ export default function BrowseStates() {
 
             {states.length === 0 ? (
                 <div className="mt-8 rounded-card border border-dashed border-sand-dark p-8 text-center text-ink-soft">
-                    No chapters have been registered yet. Check back soon — or if you lead
-                    a chapter, <Link to="/signup" className="font-semibold text-plum hover:underline">register it here</Link>.
+                    No chapters have been registered yet. Check back soon!
                 </div>
             ) : (
                 <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3">
