@@ -5,6 +5,12 @@
 // by firestore.rules against the literal value in that file -- it is never
 // shipped in the JS bundle and never stored anywhere the client can read
 // back. See firestore.rules for where to set/change the code.
+//
+// Both signUpVolunteer and signUpAdmin return the exact profile they just
+// wrote to Firestore, so callers can set it into AuthContext directly
+// instead of re-fetching it -- re-fetching immediately after signup is
+// racy, since Firebase Auth's onAuthStateChanged listener fires the
+// instant the account is created, before these Firestore writes finish.
 
 import {
   createUserWithEmailAndPassword,
@@ -33,6 +39,7 @@ async function rollbackAuthUser(user) {
 
 export async function signUpVolunteer({ name, email, password }) {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
+  const profile = { uid: cred.user.uid, name, email, role: 'volunteer' };
   try {
     await updateProfile(cred.user, { displayName: name });
     await setDoc(doc(db, 'users', cred.user.uid), {
@@ -45,7 +52,7 @@ export async function signUpVolunteer({ name, email, password }) {
     await rollbackAuthUser(cred.user);
     throw err;
   }
-  return cred.user;
+  return { user: cred.user, profile };
 }
 
 /**
@@ -56,8 +63,8 @@ export async function signUpVolunteer({ name, email, password }) {
  * @param {string} [params.newChapterName] - set when creating a new chapter
  */
 export async function signUpAdmin({
-  name, email, password, code, state, chapterId, newChapterName,
-}) {
+                                    name, email, password, code, state, chapterId, newChapterName,
+                                  }) {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   const uid = cred.user.uid;
 
@@ -120,7 +127,8 @@ export async function signUpAdmin({
   // backstop in case this delete doesn't go through.)
   await deleteDoc(doc(db, 'adminVerifications', uid)).catch(() => {});
 
-  return cred.user;
+  const profile = { uid, name, email, role: 'admin', chapterId: finalChapterId };
+  return { user: cred.user, profile };
 }
 
 export async function logIn(email, password) {

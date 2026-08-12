@@ -24,10 +24,12 @@ export default function Navbar() {
         { to: '/volunteer/my-events', label: 'My events' },
       ];
 
+  const logoHref = !user ? '/' : profile?.role === 'admin' ? '/admin' : '/volunteer';
+
   return (
     <header className="sticky top-0 z-40 border-b border-sand bg-paper/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
-        <Link to="/" className="group flex items-center gap-2" onClick={() => setOpen(false)}>
+        <Link to={logoHref} className="group flex items-center gap-2" onClick={() => setOpen(false)}>
           <ThreadMark className="h-7 w-7 shrink-0" />
           <span className="font-display text-xl font-semibold tracking-tight text-ink">
             Klotho <span className="text-plum">Connect</span>
