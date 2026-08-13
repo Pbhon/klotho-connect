@@ -18,10 +18,14 @@ export default function Navbar() {
   const links = !user
     ? [{ to: '/login', label: 'Log in' }]
     : profile?.role === 'admin'
-    ? [{ to: '/admin', label: 'Dashboard' }]
+    ? [
+        { to: '/admin', label: 'Dashboard' },
+        { to: '/admin/analytics', label: 'Analytics' },
+    ]
     : [
         { to: '/volunteer', label: 'Browse chapters' },
         { to: '/volunteer/my-events', label: 'My events' },
+        { to: '/volunteer/profile', label: 'Profile' },
       ];
 
   const logoHref = !user ? '/' : profile?.role === 'admin' ? '/admin' : '/volunteer';

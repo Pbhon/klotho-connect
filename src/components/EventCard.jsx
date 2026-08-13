@@ -14,7 +14,7 @@ export default function EventCard({ event, footer }) {
                 )}
             </div>
 
-            <p className="mt-1.5 text-sm font-medium text-plum">{formatEventDateTime(event.dateTime)}</p>
+            <p className="mt-1.5 text-sm font-medium text-plum">{formatEventDateTime(event.dateTime, event.endDateTime)}</p>
             {event.location && <p className="text-sm text-ink-soft">{event.location}</p>}
 
             {event.description && (

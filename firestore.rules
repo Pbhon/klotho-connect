@@ -59,14 +59,6 @@ service cloud.firestore {
 
       allow delete: if false;
 
-      // myEvents/{eventId} -- a denormalized copy of an event the owner
-      // has signed up for, written in the same batch as the signup
-      // itself (see signUpForEvent/cancelSignup/deleteEvent in
-      // lib/firestore.js). This is what makes "My events" a single cheap
-      // read instead of a fragile cross-chapter collection-group query.
-      // The owner creates/deletes their own copies; the event's chapter
-      // admin can refresh (not create/delete) copies when they edit the
-      // event, so an edit never leaves a volunteer looking at stale info.
       match /myEvents/{eventId} {
         allow read, create: if isSignedIn() && request.auth.uid == userId;
 
@@ -105,27 +97,59 @@ service cloud.firestore {
 
       allow create: if isAdminOfChapter(request.resource.data.chapterId)
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.reminderSent == false
-        && request.resource.data.signupCount == 0;
+        && request.resource.data.signupCount == 0
+        && request.resource.data.quotaFinalized == false;
 
+      // Quota fields (quotaFinalized/quotaMet/finalSignupCount) are
+      // deliberately excluded from what a chapter admin's *general* edit
+      // can touch (branch 1 below) -- they're only ever set by the
+      // narrow "finalize" branch 3, which locks them in exactly once and
+      // verifies the values itself rather than trusting the client. This
+      // app runs on Firebase's free Spark plan (no Cloud Functions), so
+      // there's no server-side scheduled job -- finalizeChapterQuotas()
+      // in lib/firestore.js runs this from a chapter admin's own browser
+      // whenever they view their events, and these rules are what make
+      // that safe to trust despite coming from a client.
       allow update: if (
+        // 1. Regular admin edit of event details -- quota fields must
+        // stay exactly as they were.
         isAdminOfChapter(resource.data.chapterId)
         && request.resource.data.chapterId == resource.data.chapterId
         && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.quotaFinalized == resource.data.quotaFinalized
+        && request.resource.data.quotaMet == resource.data.quotaMet
+        && request.resource.data.finalSignupCount == resource.data.finalSignupCount
       ) || (
+        // 2. A volunteer's own sign-up/cancel nudging the counter by
+        // exactly one, and touching nothing else.
         isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signupCount'])
         && (
           request.resource.data.signupCount == resource.data.signupCount + 1 ||
           request.resource.data.signupCount == resource.data.signupCount - 1
         )
+      ) || (
+        // 3. Quota finalization -- any admin of this chapter can lock in
+        // the verdict for a past, not-yet-finalized event, but only with
+        // values these rules verify are actually correct: the event must
+        // genuinely have ended, finalSignupCount must equal the real
+        // current signupCount (not an arbitrary number), quotaMet must
+        // be the real comparison against the real goal, nothing else on
+        // the document may change, and quotaFinalized can only move
+        // false -> true -- once set, this branch can never fire again
+        // for this document, so it can't be replayed to change the
+        // verdict later.
+        isAdminOfChapter(resource.data.chapterId)
+        && resource.data.quotaFinalized == false
+        && resource.data.endDateTime <= request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quotaFinalized', 'quotaMet', 'finalSignupCount'])
+        && request.resource.data.quotaFinalized == true
+        && request.resource.data.finalSignupCount == resource.data.signupCount
+        && request.resource.data.quotaMet == (resource.data.signupCount >= resource.data.volunteersNeeded)
       );
 
       allow delete: if isAdminOfChapter(resource.data.chapterId);
 
-      // signups/{uid} — one doc per volunteer, doc id == their own uid.
-      // get/delete use the path segment; list uses the data field
-      // (needed for the admin roster query — see isAdminOfChapter below).
       match /signups/{uid} {
         allow get: if isSignedIn() && (
           request.auth.uid == uid ||

@@ -36,7 +36,7 @@ export default function EventRoster() {
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold text-ink">{event.title}</h1>
-          <p className="mt-1 text-sm font-medium text-plum">{formatEventDateTime(event.dateTime)}</p>
+          <p className="mt-1 text-sm font-medium text-plum">{formatEventDateTime(event.dateTime, event.endDateTime)}</p>
         </div>
         <Link
           to={`/admin/events/${eventId}/edit`}

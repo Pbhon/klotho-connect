@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { subscribeToChapterEvents, getChapter, deleteEvent } from '../../lib/firestore';
+import { subscribeToChapterEvents, getChapter, deleteEvent, finalizeChapterQuotas } from '../../lib/firestore';
 import EventCard from '../../components/EventCard';
 import Spinner from '../../components/Spinner';
 import { isPast } from '../../lib/format';
@@ -14,6 +14,10 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     getChapter(profile.chapterId).then(setChapter);
+    finalizeChapterQuotas(profile.chapterId).catch(() => {
+      // Best-effort housekeeping -- if this fails, Analytics will just
+      // retry it next time it's opened. Not worth surfacing an error for.
+    });
     const unsubscribe = subscribeToChapterEvents(profile.chapterId, setEvents);
     return unsubscribe;
   }, [profile.chapterId]);
@@ -98,9 +102,15 @@ export default function AdminDashboard() {
                         key={ev.id}
                         event={ev}
                         footer={
-                          <Link to={`/admin/events/${ev.id}/roster`} className="text-sm font-semibold text-plum hover:underline">
-                            View roster
-                          </Link>
+                          <div className="flex flex-wrap gap-2 text-sm">
+                            <Link to={`/admin/events/${ev.id}/roster`} className="font-semibold text-plum hover:underline">
+                              Roster
+                            </Link>
+                            <span className="text-sand-dark">&middot;</span>
+                            <Link to={`/admin/events/${ev.id}/edit`} className="font-semibold text-ink-soft hover:text-ink">
+                              Edit
+                            </Link>
+                          </div>
                         }
                     />
                 ))}

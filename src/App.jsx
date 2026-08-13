@@ -19,6 +19,9 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const EventForm = lazy(() => import('./pages/admin/EventForm'));
 const EventRoster = lazy(() => import('./pages/admin/EventRoster'));
 
+const Profile = lazy(() => import('./pages/volunteer/Profile'))
+const Analytics = lazy(() => import('./pages/admin/Analytics'));
+
 export default function App() {
   return (
     <>
@@ -43,6 +46,14 @@ export default function App() {
               element={
                 <ProtectedRoute role="volunteer">
                   <MyEvents />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/volunteer/profile"
+              element={
+                <ProtectedRoute role="volunteer">
+                  <Profile />
                 </ProtectedRoute>
               }
             />
@@ -76,6 +87,14 @@ export default function App() {
               element={
                 <ProtectedRoute role="admin">
                   <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/analytics"
+              element={
+                <ProtectedRoute role="admin">
+                  <Analytics />
                 </ProtectedRoute>
               }
             />
