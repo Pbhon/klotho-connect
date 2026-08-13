@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Navbar from './components/Navbar';
 import ProtectedRoute from './components/ProtectedRoute';
 import Spinner from './components/Spinner';
@@ -20,7 +21,7 @@ const EventForm = lazy(() => import('./pages/admin/EventForm'));
 const EventRoster = lazy(() => import('./pages/admin/EventRoster'));
 
 const Profile = lazy(() => import('./pages/volunteer/Profile'))
-const Analytics = lazy(() => import('./pages/admin/Analytics'));
+const AnalyticsPage = lazy(() => import('./pages/admin/Analytics'));
 
 export default function App() {
   return (
@@ -94,7 +95,7 @@ export default function App() {
               path="/admin/analytics"
               element={
                 <ProtectedRoute role="admin">
-                  <Analytics />
+                  <AnalyticsPage />
                 </ProtectedRoute>
               }
             />
@@ -127,6 +128,7 @@ export default function App() {
           </Routes>
         </Suspense>
       </main>
+      <Analytics />
     </>
   );
 }
