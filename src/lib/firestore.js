@@ -46,7 +46,7 @@ export function toTimestamp(dateStr, timeStr) {
 }
 
 export async function createEvent({
-                                    chapterId, title, description, location, dateTime, volunteersNeeded, createdBy,
+                                    chapterId, title, description, location, dateTime, endDateTime, volunteersNeeded, createdBy,
                                   }) {
   return addDoc(collection(db, 'events'), {
     chapterId,
@@ -54,9 +54,17 @@ export async function createEvent({
     description,
     location,
     dateTime,
+    endDateTime,
     volunteersNeeded: Number(volunteersNeeded) || 1,
     signupCount: 0,
-    reminderSent: false,
+    // Quota tracking is locked in by the finalizeEventQuotas Cloud
+    // Function shortly after each event's end time passes -- see
+    // functions/index.js. firestore.rules prevents anyone else from
+    // setting these three fields, so they're a trustworthy historical
+    // record rather than something a chapter lead could self-report.
+    quotaFinalized: false,
+    quotaMet: null,
+    finalSignupCount: null,
     createdBy,
     createdAt: serverTimestamp(),
   });
@@ -71,7 +79,7 @@ export async function updateEvent(eventId, data) {
   batch.update(doc(db, 'events', eventId), data);
 
   const denormFields = {};
-  ['title', 'description', 'location', 'dateTime', 'volunteersNeeded'].forEach((key) => {
+  ['title', 'description', 'location', 'dateTime', 'endDateTime', 'volunteersNeeded'].forEach((key) => {
     if (key in data) denormFields[key] = data[key];
   });
   if (Object.keys(denormFields).length > 0) {
@@ -121,6 +129,39 @@ export function subscribeToChapterEvents(chapterId, callback) {
   });
 }
 
+/** Locks in a permanent quotaMet/finalSignupCount verdict for any of
+ *  this chapter's past events that haven't been finalized yet.
+ *
+ *  There's no server-side scheduled job for this (the app runs on
+ *  Firebase's free Spark plan, which doesn't support Cloud Functions) --
+ *  instead, a chapter admin's own browser runs this whenever they view
+ *  their events (see AdminDashboard.jsx / Analytics.jsx). That's safe to
+ *  trust despite coming from a client because firestore.rules
+ *  independently verifies every value being written is actually correct
+ *  and that the flip only ever happens once -- see the "3. Quota
+ *  finalization" branch of the events update rule. Filters client-side
+ *  off the existing per-chapter fetch rather than a second compound
+ *  query, so no extra index is needed. */
+export async function finalizeChapterQuotas(chapterId) {
+  const events = await getEventsByChapter(chapterId);
+  const now = Date.now();
+  const due = events.filter(
+      (ev) => !ev.quotaFinalized && ev.endDateTime && ev.endDateTime.toMillis() <= now
+  );
+  if (due.length === 0) return;
+
+  const batch = writeBatch(db);
+  due.forEach((ev) => {
+    const finalSignupCount = ev.signupCount || 0;
+    batch.update(doc(db, 'events', ev.id), {
+      quotaFinalized: true,
+      finalSignupCount,
+      quotaMet: finalSignupCount >= ev.volunteersNeeded,
+    });
+  });
+  await batch.commit();
+}
+
 // ---------- Signups ----------
 //
 // Every sign-up writes to three places in one atomic batch:
@@ -153,6 +194,7 @@ export async function signUpForEvent({ event, uid, name, email }) {
     description: event.description || '',
     location: event.location || '',
     dateTime: event.dateTime,
+    endDateTime: event.endDateTime,
     volunteersNeeded: event.volunteersNeeded,
     signedUpAt: serverTimestamp(),
   });

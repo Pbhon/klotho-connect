@@ -1,13 +1,4 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "reminderSent", "order": "ASCENDING" },
-        { "fieldPath": "dateTime", "order": "ASCENDING" }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }

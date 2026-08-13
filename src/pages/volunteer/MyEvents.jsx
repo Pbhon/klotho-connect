@@ -61,7 +61,7 @@ export default function MyEvents() {
                             <div className="flex items-start justify-between gap-4">
                                 <Link to={`/volunteer/event/${ev.id}`} className="flex-1">
                                     <p className="font-display font-semibold text-ink hover:text-plum">{ev.title}</p>
-                                    <p className="text-sm text-plum">{formatEventDateTime(ev.dateTime)}</p>
+                                    <p className="text-sm text-plum">{formatEventDateTime(ev.dateTime, ev.endDateTime)}</p>
                                     {ev.location && <p className="text-sm text-ink-soft">{ev.location}</p>}
                                 </Link>
                                 <SignupButton
@@ -85,7 +85,7 @@ export default function MyEvents() {
                         {past.map((ev) => (
                             <li key={ev.id} className="rounded-card border border-sand-dark bg-paper p-4 opacity-70">
                                 <p className="font-display font-semibold text-ink">{ev.title}</p>
-                                <p className="text-sm text-plum">{formatEventDateTime(ev.dateTime)}</p>
+                                <p className="text-sm text-plum">{formatEventDateTime(ev.dateTime, ev.endDateTime)}</p>
                             </li>
                         ))}
                     </ul>

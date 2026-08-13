@@ -81,7 +81,7 @@ export default function EventDetail() {
           </span>
           )}
           <h1 className="font-display text-2xl font-semibold text-ink sm:text-3xl">{event.title}</h1>
-          <p className="mt-2 text-base font-medium text-plum">{formatEventDateTime(event.dateTime)}</p>
+          <p className="mt-2 text-base font-medium text-plum">{formatEventDateTime(event.dateTime, event.endDateTime)}</p>
           {event.location && <p className="text-ink-soft">{event.location}</p>}
 
           {event.description && (
