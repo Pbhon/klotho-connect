@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { signUpVolunteer, signUpAdmin, AdminCodeError } from '../lib/auth';
 import { getChaptersByState } from '../lib/firestore';
@@ -10,8 +10,11 @@ const NEW_CHAPTER = '__new__';
 
 export default function Signup() {
   const { user, loading: authLoading, setProfile, setCreatingAccount } = useAuth();
+  const [searchParams] = useSearchParams();
 
-  const [role, setRole] = useState('volunteer');
+  const [role, setRole] = useState(() =>
+      searchParams.get('role') === 'admin' ? 'admin' : 'volunteer'
+  );
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

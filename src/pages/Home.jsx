@@ -36,13 +36,13 @@ export default function Home() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                to="/signup"
+                to="/signup?role=volunteer"
                 className="rounded-full bg-plum px-6 py-3 text-sm font-semibold text-paper shadow-sm transition hover:bg-plum-dark"
               >
                 Find an event to join
               </Link>
               <Link
-                to="/signup"
+                to="/signup?role=admin"
                 className="rounded-full border border-sand-dark bg-white/40 px-6 py-3 text-sm font-semibold text-ink transition hover:border-plum hover:text-plum"
               >
                 I lead a chapter
@@ -95,7 +95,7 @@ export default function Home() {
               for whatever fits your week. No minimum commitment.
             </p>
             <Link
-              to="/signup"
+              to="/signup?role=volunteer"
               className="mt-5 inline-block rounded-full bg-gold px-5 py-2.5 text-sm font-semibold text-ink transition hover:bg-gold-dark hover:text-paper"
             >
               Create a volunteer account
@@ -112,7 +112,7 @@ export default function Home() {
               You'll get an email the day before with who's coming.
             </p>
             <Link
-              to="/signup"
+              to="/signup?role=admin"
               className="mt-5 inline-block rounded-full border border-plum px-5 py-2.5 text-sm font-semibold text-plum transition hover:bg-plum hover:text-paper"
             >
               Register your chapter
